@@ -9,14 +9,15 @@
     <style>
         body { font-family: sans-serif; background: #1a1a2e; color: white; text-align: center; padding: 20px; }
         .container { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; margin-top: 20px; }
-        .card { background: #16213e; border-radius: 12px; padding: 15px; width: 180px; border-top: 4px solid #4ecca3; }
+        .card { background: #16213e; border-radius: 12px; padding: 15px; width: 180px; border-top: 4px solid #4ecca3; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         .value { font-size: 32px; font-weight: bold; color: #4ecca3; margin: 10px 0; }
-        .history-container { margin: 30px auto; max-width: 850px; background: #16213e; padding: 20px; border-radius: 12px; }
-        .header-table { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .history-container { margin: 30px auto; max-width: 850px; background: #16213e; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .header-table { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #30475e; padding-bottom: 10px; }
         table { width: 100%; border-collapse: collapse; }
         th, td { padding: 10px; border: 1px solid #30475e; text-align: center; }
         th { background: #1f4068; color: #4ecca3; }
-        .btn-excel { background: #1D6F42; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
+        tr:nth-child(even) { background: #1b2640; }
+        .btn-excel { background: #1D6F42; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -29,12 +30,12 @@
 
     <div class="history-container">
         <div class="header-table">
-            <h3>NHẬT KÝ VẬN HÀNH</h3>
+            <h3 style="color: #4ecca3; margin:0;">NHẬT KÝ VẬN HÀNH</h3>
             <button class="btn-excel" onclick="exportToExcel()">📥 XUẤT EXCEL</button>
         </div>
         <table>
             <thead><tr><th>Thời Gian</th><th>Áp (V)</th><th>Dòng (mA)</th><th>Khói (%)</th></tr></thead>
-            <tbody id="history-content"><tr><td colspan="4">Đang tải dữ liệu...</td></tr></tbody>
+            <tbody id="history-content"><tr><td colspan="4">Đang quét dữ liệu lịch sử...</td></tr></tbody>
         </table>
     </div>
 
@@ -51,47 +52,70 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // Cập nhật Realtime từ nhánh 'station'
+        // 1. CẬP NHẬT REALTIME
         db.ref('station').on('value', (s) => {
             const data = s.val();
             if(data) {
-                document.getElementById('voltage').innerText = data.voltage.toFixed(2);
-                document.getElementById('current').innerText = data.current.toFixed(2);
-                document.getElementById('smoke').innerText = data.smoke.toFixed(1);
+                document.getElementById('voltage').innerText = data.voltage ? data.voltage.toFixed(2) : "--";
+                document.getElementById('current').innerText = data.current ? data.current.toFixed(2) : "--";
+                document.getElementById('smoke').innerText = data.smoke ? data.smoke.toFixed(1) : "--";
             }
         });
 
-        // Lấy lịch sử từ các mã ID ngẫu nhiên (gốc tọa độ)
-        db.ref().limitToLast(20).on('value', (snapshot) => {
+        // 2. HIỂN THỊ NHẬT KÝ (Quét toàn bộ để tìm nhật ký cũ)
+        db.ref().on('value', (snapshot) => {
             const tableBody = document.getElementById('history-content');
-            tableBody.innerHTML = "";
+            let rows = [];
+
             snapshot.forEach((child) => {
-                if (child.key !== 'station') { // Bỏ qua nhánh station
-                    const d = child.val();
-                    const row = `<tr>
-                        <td>${d.time || 'N/A'}</td>
-                        <td>${d.v ? d.v.toFixed(2) : '0.00'}</td>
-                        <td>${d.a ? d.a.toFixed(2) : '0.00'}</td>
-                        <td>${d.s ? d.s.toFixed(1) : '0.0'}</td>
-                    </tr>`;
-                    tableBody.insertAdjacentHTML('afterbegin', row);
+                const key = child.key;
+                const data = child.val();
+
+                // Nếu là nhánh history hoặc các mã ID ngẫu nhiên (bắt đầu bằng dấu gạch ngang)
+                if (key === 'history' || key.startsWith('-')) {
+                    // Nếu là thư mục 'history' thì duyệt tiếp bên trong
+                    if (key === 'history') {
+                        Object.values(data).forEach(item => rows.push(item));
+                    } else {
+                        rows.push(data); // Nếu là mã ID ngẫu nhiên ở ngoài cùng
+                    }
                 }
+            });
+
+            // Sắp xếp bản ghi mới nhất lên đầu (nếu có trường time)
+            rows.reverse(); 
+
+            tableBody.innerHTML = "";
+            rows.slice(0, 20).forEach(d => { // Hiển thị 20 dòng gần nhất
+                const row = `<tr>
+                    <td>${d.time || 'N/A'}</td>
+                    <td>${(d.v || d.voltage || 0).toFixed(2)}</td>
+                    <td>${(d.a || d.current || 0).toFixed(2)}</td>
+                    <td>${(d.s || d.smoke || 0).toFixed(1)}</td>
+                </tr>`;
+                tableBody.insertAdjacentHTML('beforeend', row);
             });
         });
 
+        // 3. XUẤT EXCEL TOÀN BỘ
         function exportToExcel() {
             db.ref().once('value').then((snapshot) => {
-                const data = [["Thoi Gian", "Ap (V)", "Dong (mA)", "Khoi (%)"]];
+                const exportData = [["Thoi Gian", "Ap (V)", "Dong (mA)", "Khoi (%)"]];
                 snapshot.forEach((child) => {
-                    if (child.key !== 'station') {
-                        const v = child.val();
-                        data.push([v.time, v.v, v.a, v.s]);
+                    const key = child.key;
+                    const data = child.val();
+                    if (key === 'history' || key.startsWith('-')) {
+                        if (key === 'history') {
+                            Object.values(data).forEach(d => exportData.push([d.time, d.v || d.voltage, d.a || d.current, d.s || d.smoke]));
+                        } else {
+                            exportData.push([data.time, data.v || data.voltage, data.a || data.current, data.s || data.smoke]);
+                        }
                     }
                 });
-                const ws = XLSX.utils.aoa_to_sheet(data);
+                const ws = XLSX.utils.aoa_to_sheet(exportData);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, "BaoCao");
-                XLSX.writeFile(wb, "Bao_cao_tram_dien.xlsx");
+                XLSX.writeFile(wb, "Bao_cao_tong_hop.xlsx");
             });
         }
     </script>
