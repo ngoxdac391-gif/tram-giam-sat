@@ -2,28 +2,33 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Hệ Thống Giám Sát Realtime & Lịch Sử</title>
+    <title>Hệ Thống Giám Sát & Báo Cáo Realtime</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <style>
-        body { font-family: Arial, sans-serif; background: #1a1a2e; color: white; text-align: center; padding: 20px; }
-        .container { display: flex; justify-content: center; gap: 20px; margin-top: 50px; flex-wrap: wrap; }
-        .card { background: #16213e; border-radius: 15px; padding: 20px; width: 200px; border-top: 5px solid #4ecca3; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: white; text-align: center; padding: 20px; }
+        .container { display: flex; justify-content: center; gap: 20px; margin-top: 30px; flex-wrap: wrap; }
+        .card { background: #16213e; border-radius: 15px; padding: 20px; width: 220px; border-top: 5px solid #4ecca3; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         .value { font-size: 40px; font-weight: bold; margin: 10px 0; color: #4ecca3; }
         .unit { font-size: 16px; color: #888; }
         
-        /* Style cho bảng lịch sử */
-        .history-container { margin: 40px auto; max-width: 800px; background: #16213e; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; color: white; }
+        /* Style cho phần lịch sử và nút bấm */
+        .history-container { margin: 40px auto; max-width: 900px; background: #16213e; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .header-table { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #30475e; padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; color: white; }
         th { background: #1f4068; color: #4ecca3; padding: 12px; border: 1px solid #30475e; }
         td { padding: 10px; border: 1px solid #30475e; text-align: center; }
         tr:nth-child(even) { background: #1b2640; }
-        h2 { color: #4ecca3; }
+        
+        .btn-excel { background: #1D6F42; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-excel:hover { background: #155130; transform: scale(1.05); }
+        h2 { color: #4ecca3; margin: 0; }
     </style>
 </head>
 <body>
-    <h1>TRẠM GIÁM SÁT ĐIỆN & KHÓI</h1>
+    <h1>TRẠM GIÁM SÁT ĐIỆN & KHÓI - TỔ ĐIỆN</h1>
     
     <div class="container">
         <div class="card">
@@ -44,72 +49,6 @@
     </div>
 
     <div class="history-container">
-        <h2>NHẬT KÝ VẬN HÀNH (10 bản ghi mới nhất)</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Thời Gian</th>
-                    <th>Áp (V)</th>
-                    <th>Dòng (mA)</th>
-                    <th>Khói (%)</th>
-                </tr>
-            </thead>
-            <tbody id="history-content">
-                <tr>
-                    <td colspan="4">Đang tải dữ liệu lịch sử...</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyD23Fp9wkkRB0xx0dlWqWjBpbLD6UfOhhY",
-            authDomain: "esp32-744da.firebaseapp.com",
-            databaseURL: "https://esp32-744da-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "esp32-744da",
-            storageBucket: "esp32-744da.firebasestorage.app",
-            messagingSenderId: "421478763593",
-            appId: "1:421478763593:web:f58984803e8cb487dec398"
-        };
-
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-
-        // 1. Cập nhật Realtime cho 3 ô phía trên
-        database.ref('station/voltage').on('value', (s) => {
-            document.getElementById('voltage').innerText = s.val() ? s.val().toFixed(2) : "0.00";
-        });
-        database.ref('station/current').on('value', (s) => {
-            document.getElementById('current').innerText = s.val() ? s.val().toFixed(2) : "0.00";
-        });
-        database.ref('station/smoke').on('value', (s) => {
-            document.getElementById('smoke').innerText = s.val() ? s.val().toFixed(1) : "0.0";
-        });
-
-        // 2. Lấy 10 dòng dữ liệu mới nhất từ nhánh 'history'
-        database.ref('history').limitToLast(10).on('value', (snapshot) => {
-            const tableBody = document.getElementById('history-content');
-            tableBody.innerHTML = ""; // Xóa dòng cũ
-
-            if (snapshot.exists()) {
-                snapshot.forEach((child) => {
-                    const data = child.val();
-                    const rowHtml = `
-                        <tr>
-                            <td>${data.time || '---'}</td>
-                            <td>${data.v ? data.v.toFixed(2) : '0.00'}</td>
-                            <td>${data.a ? data.a.toFixed(2) : '0.00'}</td>
-                            <td>${data.s ? data.s.toFixed(1) : '0.0'}</td>
-                        </tr>
-                    `;
-                    // insertAdjacentHTML 'afterbegin' để dòng mới nhất lên đầu bảng
-                    tableBody.insertAdjacentHTML('afterbegin', rowHtml);
-                });
-            } else {
-                tableBody.innerHTML = "<tr><td colspan='4'>Chưa có dữ liệu lịch sử trong Firebase</td></tr>";
-            }
-        });
-    </script>
-</body>
-</html>
+        <div class="header-table">
+            <h2>NHẬT KÝ VẬN HÀNH</h2>
+            <button class="btn-excel" onclick="exportToExcel()">📥 XU
