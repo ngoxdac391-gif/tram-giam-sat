@@ -2,53 +2,98 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Hệ Thống Giám Sát & Báo Cáo Realtime</title>
+    <title>Giám Sát Trạm Điện - Tổ Điện</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: white; text-align: center; padding: 20px; }
-        .container { display: flex; justify-content: center; gap: 20px; margin-top: 30px; flex-wrap: wrap; }
-        .card { background: #16213e; border-radius: 15px; padding: 20px; width: 220px; border-top: 5px solid #4ecca3; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-        .value { font-size: 40px; font-weight: bold; margin: 10px 0; color: #4ecca3; }
-        .unit { font-size: 16px; color: #888; }
-        
-        /* Style cho phần lịch sử và nút bấm */
-        .history-container { margin: 40px auto; max-width: 900px; background: #16213e; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        .header-table { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #30475e; padding-bottom: 10px; }
-        table { width: 100%; border-collapse: collapse; color: white; }
-        th { background: #1f4068; color: #4ecca3; padding: 12px; border: 1px solid #30475e; }
-        td { padding: 10px; border: 1px solid #30475e; text-align: center; }
-        tr:nth-child(even) { background: #1b2640; }
-        
-        .btn-excel { background: #1D6F42; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.3s; }
-        .btn-excel:hover { background: #155130; transform: scale(1.05); }
-        h2 { color: #4ecca3; margin: 0; }
+        body { font-family: sans-serif; background: #1a1a2e; color: white; text-align: center; padding: 20px; }
+        .container { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; margin-top: 20px; }
+        .card { background: #16213e; border-radius: 12px; padding: 15px; width: 180px; border-top: 4px solid #4ecca3; }
+        .value { font-size: 32px; font-weight: bold; color: #4ecca3; margin: 10px 0; }
+        .history-container { margin: 30px auto; max-width: 850px; background: #16213e; padding: 20px; border-radius: 12px; }
+        .header-table { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; border: 1px solid #30475e; text-align: center; }
+        th { background: #1f4068; color: #4ecca3; }
+        .btn-excel { background: #1D6F42; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <h1>TRẠM GIÁM SÁT ĐIỆN & KHÓI - TỔ ĐIỆN</h1>
-    
+    <h2>TRẠM GIÁM SÁT ĐIỆN & KHÓI - TỔ ĐIỆN</h2>
     <div class="container">
-        <div class="card">
-            <div>ĐIỆN ÁP</div>
-            <div id="voltage" class="value">--</div>
-            <div class="unit">Vôn (V)</div>
-        </div>
-        <div class="card">
-            <div>DÒNG ĐIỆN</div>
-            <div id="current" class="value">--</div>
-            <div class="unit">mA</div>
-        </div>
-        <div class="card">
-            <div>KHÓI</div>
-            <div id="smoke" class="value">--</div>
-            <div class="unit">Phần trăm (%)</div>
-        </div>
+        <div class="card"><div>ĐIỆN ÁP</div><div id="voltage" class="value">--</div><div>Vôn (V)</div></div>
+        <div class="card"><div>DÒNG ĐIỆN</div><div id="current" class="value">--</div><div>mA</div></div>
+        <div class="card"><div>KHÓI</div><div id="smoke" class="value">--</div><div>%</div></div>
     </div>
 
     <div class="history-container">
         <div class="header-table">
-            <h2>NHẬT KÝ VẬN HÀNH</h2>
-            <button class="btn-excel" onclick="exportToExcel()">📥 XU
+            <h3>NHẬT KÝ VẬN HÀNH</h3>
+            <button class="btn-excel" onclick="exportToExcel()">📥 XUẤT EXCEL</button>
+        </div>
+        <table>
+            <thead><tr><th>Thời Gian</th><th>Áp (V)</th><th>Dòng (mA)</th><th>Khói (%)</th></tr></thead>
+            <tbody id="history-content"><tr><td colspan="4">Đang tải dữ liệu...</td></tr></tbody>
+        </table>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyD23Fp9wkkRB0xx0dlWqWjBpbLD6UfOhhY",
+            authDomain: "esp32-744da.firebaseapp.com",
+            databaseURL: "https://esp32-744da-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "esp32-744da",
+            storageBucket: "esp32-744da.firebasestorage.app",
+            messagingSenderId: "421478763593",
+            appId: "1:421478763593:web:f58984803e8cb487dec398"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // Cập nhật Realtime từ nhánh 'station'
+        db.ref('station').on('value', (s) => {
+            const data = s.val();
+            if(data) {
+                document.getElementById('voltage').innerText = data.voltage.toFixed(2);
+                document.getElementById('current').innerText = data.current.toFixed(2);
+                document.getElementById('smoke').innerText = data.smoke.toFixed(1);
+            }
+        });
+
+        // Lấy lịch sử từ các mã ID ngẫu nhiên (gốc tọa độ)
+        db.ref().limitToLast(20).on('value', (snapshot) => {
+            const tableBody = document.getElementById('history-content');
+            tableBody.innerHTML = "";
+            snapshot.forEach((child) => {
+                if (child.key !== 'station') { // Bỏ qua nhánh station
+                    const d = child.val();
+                    const row = `<tr>
+                        <td>${d.time || 'N/A'}</td>
+                        <td>${d.v ? d.v.toFixed(2) : '0.00'}</td>
+                        <td>${d.a ? d.a.toFixed(2) : '0.00'}</td>
+                        <td>${d.s ? d.s.toFixed(1) : '0.0'}</td>
+                    </tr>`;
+                    tableBody.insertAdjacentHTML('afterbegin', row);
+                }
+            });
+        });
+
+        function exportToExcel() {
+            db.ref().once('value').then((snapshot) => {
+                const data = [["Thoi Gian", "Ap (V)", "Dong (mA)", "Khoi (%)"]];
+                snapshot.forEach((child) => {
+                    if (child.key !== 'station') {
+                        const v = child.val();
+                        data.push([v.time, v.v, v.a, v.s]);
+                    }
+                });
+                const ws = XLSX.utils.aoa_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "BaoCao");
+                XLSX.writeFile(wb, "Bao_cao_tram_dien.xlsx");
+            });
+        }
+    </script>
+</body>
+</html>
